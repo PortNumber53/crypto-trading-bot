@@ -3,7 +3,9 @@ package utility
 import (
 	"log"
 
-	"github.com/rubenv/sql-migrate"
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
 func DoMigrations() {
