@@ -1,10 +1,25 @@
 // main.go
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"log"
+	"os"
 
-func main() {
-    fmt.Println("Hello, Go!")
+	"trading/modules/utility"
+)
 
-	utility.DoMigrations()
-}
+	func main() {
+		fmt.Println("Hello, Go!")
+
+		dbURL := os.Getenv("DB_URL")
+		if dbURL == "" {
+			log.Fatal("DB_URL environment variable not set")
+		}
+
+		// Run migrations
+		if err := utility.DoMigrations(dbURL); err != nil {
+			log.Fatalf("Error: %s", err)
+		}
+
+	}
