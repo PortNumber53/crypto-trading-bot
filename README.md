@@ -16,5 +16,5 @@ migrate create -ext sql -dir db/migrations -seq create_exchange_rates_table
 
 Add an env var like this
 ```
-DB_URL='postgres://grimlock:1234@localhost:5432/dbcrypto?sslmode=disable'
+DATABASE_URL='postgres://grimlock:1234@localhost:5432/dbcrypto?sslmode=disable'
 ```
