@@ -33,14 +33,24 @@ func FetchCandleData(productID string, start, end time.Time, granularity int) ([
 	log.Printf("- Fetching candle data for %s from %s to %s with granularity %d seconds",
 		productID, start.Format("2006-01-02"), end.Format("2006-01-02"), granularity)
 
-	// Coinbase API endpoint for candles
-	url := fmt.Sprintf("https://api.coinbase.com/v2/products/%s/candles", productID)
+	// Coinbase Advanced Trade API v3 endpoint for candles
+	requestPath := fmt.Sprintf("/api/v3/brokerage/products/%s/candles", productID)
+	url := "https://api.coinbase.com" + requestPath
+
+	// Generate JWT for authentication
+	jwtToken, err := generateJWT("GET", requestPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate JWT: %w", err)
+	}
 
 	// Build query parameters
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Set("Authorization", "Bearer "+jwtToken)
+	req.Header.Set("Content-Type", "application/json")
 
 	q := req.URL.Query()
 	q.Add("start", start.Format("2006-01-02T15:04:05Z"))
@@ -67,53 +77,55 @@ func FetchCandleData(productID string, start, end time.Time, granularity int) ([
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	// Parse the JSON response - Coinbase returns an array of arrays
-	var candleArrays [][]interface{}
-	if err := json.Unmarshal(body, &candleArrays); err != nil {
+	// Parse the JSON response - v3 API returns an object with a candles field
+	var response struct {
+		Candles [][]interface{} `json:"candles"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal candle data: %w", err)
 	}
 
 	// Convert to CandleData structs
 	var candles []CandleData
-	for _, candle := range candleArrays {
+	for _, candle := range response.Candles {
 		if len(candle) < 6 {
 			log.Printf("Invalid candle data format: %v", candle)
 			continue
 		}
 
-		// Parse each field
+		// Parse each field - JSON numbers unmarshal as float64
 		timestamp, ok := candle[0].(float64)
 		if !ok {
 			log.Printf("Invalid timestamp format: %v", candle[0])
 			continue
 		}
 
-		low, err := strconv.ParseFloat(candle[1].(string), 64)
-		if err != nil {
+		low, ok := candle[1].(float64)
+		if !ok {
 			log.Printf("Invalid low format: %v", candle[1])
 			continue
 		}
 
-		high, err := strconv.ParseFloat(candle[2].(string), 64)
-		if err != nil {
+		high, ok := candle[2].(float64)
+		if !ok {
 			log.Printf("Invalid high format: %v", candle[2])
 			continue
 		}
 
-		open, err := strconv.ParseFloat(candle[3].(string), 64)
-		if err != nil {
+		open, ok := candle[3].(float64)
+		if !ok {
 			log.Printf("Invalid open format: %v", candle[3])
 			continue
 		}
 
-		close, err := strconv.ParseFloat(candle[4].(string), 64)
-		if err != nil {
+		closePrice, ok := candle[4].(float64)
+		if !ok {
 			log.Printf("Invalid close format: %v", candle[4])
 			continue
 		}
 
-		volume, err := strconv.ParseFloat(candle[5].(string), 64)
-		if err != nil {
+		volume, ok := candle[5].(float64)
+		if !ok {
 			log.Printf("Invalid volume format: %v", candle[5])
 			continue
 		}
@@ -124,7 +136,7 @@ func FetchCandleData(productID string, start, end time.Time, granularity int) ([
 			Low:       low,
 			High:      high,
 			Open:      open,
-			Close:     close,
+			Close:     closePrice,
 			Volume:    volume,
 		})
 	}
@@ -167,7 +179,8 @@ func FetchAllHistoricalCandles(productID string, granularity int) ([]CandleData,
 		allCandles = append(allCandles, candles...)
 
 		// Update endTime to be the timestamp of the earliest candle we just fetched
-		earliestTimestamp := candles[0].Timestamp
+		// Coinbase returns candles in descending order (newest first)
+		earliestTimestamp := candles[len(candles)-1].Timestamp
 		endTime = time.Unix(earliestTimestamp, 0)
 
 		log.Printf("Fetched %d candles, going back to %s", len(candles), endTime.Format("2006-01-02 15:04:05"))
@@ -186,7 +199,7 @@ func FetchAllHistoricalCandles(productID string, granularity int) ([]CandleData,
 }
 
 // StoreCandleData stores candle data in the database
-func StoreCandleData(candles []CandleData) error {
+func StoreCandleData(candles []CandleData) (err error) {
 	log.Printf("- Storing %d candle data points in database", len(candles))
 
 	// Open database connection
@@ -253,7 +266,7 @@ func StoreCandleData(candles []CandleData) error {
 	}
 
 	log.Printf("Successfully stored %d candle data points, skipped %d", insertedCount, skippedCount)
-	return nil
+	return
 }
 
 // GetCandleData retrieves candle data from database with optional filtering

@@ -174,7 +174,7 @@ func parseFloatSafe(s string) (float64, error) {
 }
 
 // StoreProductsInDatabase stores products in the database
-func StoreProductsInDatabase(products []Product) error {
+func StoreProductsInDatabase(products []Product) (err error) {
 	log.Printf("- Storing %d products in database", len(products))
 
 	db, err := database.OpenConnection()
@@ -225,8 +225,7 @@ func StoreProductsInDatabase(products []Product) error {
 	}
 	defer stmt.Close()
 
-	insertedCount := 0
-	updatedCount := 0
+	successCount := 0
 
 	for _, product := range products {
 		_, err = stmt.Exec(
@@ -252,20 +251,11 @@ func StoreProductsInDatabase(products []Product) error {
 			continue
 		}
 
-		// Check if this was an insert or update
-		var exists bool
-		err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM products WHERE product_id = $1)", product.ID).Scan(&exists)
-		if err == nil {
-			if exists {
-				updatedCount++
-			} else {
-				insertedCount++
-			}
-		}
+		successCount++
 	}
 
-	log.Printf("Successfully stored products: %d inserted, %d updated", insertedCount, updatedCount)
-	return nil
+	log.Printf("Successfully stored %d products", successCount)
+	return
 }
 
 // GetProductsFromDatabase retrieves products from database with optional filtering

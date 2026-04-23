@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	_ "github.com/lib/pq"
 )
@@ -18,8 +19,8 @@ func OpenConnection() (*sql.DB, error) {
 	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
 		connStr = dbURL
 		// Ensure sslmode is set
-		if !contains(connStr, "sslmode") {
-			if contains(connStr, "?") {
+		if !strings.Contains(connStr, "sslmode") {
+			if strings.Contains(connStr, "?") {
 				connStr += "&sslmode=disable"
 			} else {
 				connStr += "?sslmode=disable"
@@ -52,20 +53,6 @@ func OpenConnection() (*sql.DB, error) {
 
 	log.Println("- Database connection established")
 	return db, nil
-}
-
-// contains checks if a string contains a substring
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSubstring(s, substr))
-}
-
-func containsSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 // CloseConnection closes the connection to the PostgreSQL database
